@@ -3,4 +3,6 @@
 
 Sprint00: train_test_split、分類・回帰パイプラインのスクラッチ  
 Sprint01: 機械学習フロー（Kaggle: Home Credit Default Risk）  
-Sprint03: 機械学習スクラッチ線形回帰  
+Sprint03: 機械学習スクラッチ（線形回帰）  
+Sprint04: 機械学習スクラッチ（ロジスティック回帰）
+Sprint05: 機械学習スクラッチ（SVM）
