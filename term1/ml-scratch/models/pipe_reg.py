@@ -127,13 +127,13 @@ class ScratchLinearRegression():
                 errors = calc - y
                 self.w_ -= self.lr * X.T.dot(errors)/X.shape[0]
                 # 最小二乗誤差（損失）の計算と格納
-                cost = (errors**2).sum() / X.shape[0]
+                cost = (errors**2).sum() / (2.0 * X.shape[0])
                 self.loss[i] = cost
                 # 検証用データがあれば、その損失も記録
                 if X_val is not None:
                     val_calc = np.dot(X_val, self.w_)
                     val_errors = val_calc - y_val
-                    val_cost = (val_errors**2).sum() / X_val.shape[0]
+                    val_cost = (val_errors**2).sum() / (2.0 * X_val.shape[0])
                     self.val_loss[i] = val_cost
                 
         # バイアス項ありの場合
@@ -147,13 +147,13 @@ class ScratchLinearRegression():
                 self.w_[1:] -= self.lr * X.T.dot(errors)/X.shape[0]
                 self.w_[0] -= self.lr * errors.sum()/X.shape[0]
                 # 最小二乗誤差（損失）の計算と格納
-                cost = (errors**2).sum() / X.shape[0]
+                cost = (errors**2).sum() / (2.0 * X.shape[0])
                 self.loss[i] = cost
                 # 検証用データがあれば、その損失も記録
                 if X_val is not None:
                     val_calc = np.dot(X_val, self.w_[1:]) + self.w_[0]
                     val_errors = val_calc - y_val
-                    val_cost = (val_errors**2).sum() / X_val.shape[0]
+                    val_cost = (val_errors**2).sum() / (2.0 * X_val.shape[0])
                     self.val_loss[i] = val_cost
         
         # これ以外に、バイアス項に異常値が入った場合
