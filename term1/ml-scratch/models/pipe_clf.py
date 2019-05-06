@@ -79,7 +79,7 @@ def log_reg(X_train, X_test, y_train, y_test, feature_names, target_names, val_s
     if not (two_features==True or two_features==False):
         raise ValueError("Set boolean value to 'two_features' parameter !")
         
-    # 多次元特徴量から2種類の全組み合わせで学習・評価し、それぞれで決定領域を可視化する場合
+    # 多次元特徴量から2種類の全組み合わせのそれぞれで学習・評価し、それぞれで決定領域を可視化する場合
     if two_features==True or X.shape[1]==2:
         # 2種特徴量の組み合わせの列indexのタプルのリストを生成
         combs = list(itertools.combinations(np.arange(X.shape[1]), 2))
@@ -118,9 +118,9 @@ class ScratchLogisticRegression:
       バイアス項を入れる場合はTrue
     verbose : bool （初期値： True）
       学習過程を出力する場合はTrue
-    lam : bool （初期値： 0.1）
+    lam : float （初期値： 0.1）
       正則化項パラメータの変数ラムダ
-    tol : int （初期値： 1e-3）
+    tol : float （初期値： 1e-3）
       毎回の学習によるコスト関数値の変化をストップするための閾値
     random_state : int （初期値： 1）
       重みを初期化するための乱数シード
