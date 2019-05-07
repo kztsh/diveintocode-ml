@@ -385,7 +385,8 @@ def scoring_func(X_train, X_test, y_train, y_test,
     plt.show()
 
 
-def decision_region(X, y, model, step=0.01, test_idx=None, feature_names=None, target_names=None, model_name=None):
+def decision_region(X, y, model, step=0.01, test_idx=None, feature_names=["f0","f1"], 
+                    target_names=["target0","target1","target2"], model_name="unknown model"):
     """
     多値分類（3種まで）を2次元の特徴量で学習したモデルの決定領域を描く。
     背景の色が学習したモデルによる推定値から描画される。
