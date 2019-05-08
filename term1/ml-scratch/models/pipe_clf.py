@@ -286,8 +286,124 @@ class ScratchLogisticRegression:
         plt.show()
 
 
+class ScratchSVMClassifier:
+    """
+    ラグランジュ未定乗数法の制約条件に従ったイテレーションによるSVMClassifierのスクラッチ実装（最急降下法ではない）
+
+    Parameters
+    ----------
+    n_iter : int （初期値： 50）
+      イテレーション数
+    C : float （初期値： 1e+10）
+      スラック変数を導入したソフトマージンにおけるパラメータC
+      （初期値のように無限大に近い値ではハードマージンに相当する）
+
+    Attributes
+    ----------
+    self.evaluation_ : list of float, shape (self.iter,)
+      訓練データによるイテレーション毎の評価関数値の記録
+    self.lam_ : 次の形のndarray, shape (n_samples,)
+      学習後の、各サンプル点のラグランジュ未定乗数の値
+    self.w_ : 次の形のndarray, shape (n_features,)
+      重みパラメータ
+    self.w0_ : float
+      バイアス項
+    """
+    def __init__(self, n_iter=50, C=1e+10):
+        self.n_iter = n_iter
+        self.C = C
+        self.evaluation_ = [0,]
+    
+    def fit(self, X, y):
+        # 初期値設定
+        lam = np.zeros(X.shape[0]) # ラグランジュ未定乗数ラムダの初期値（要素数：サンプル数）
+        lamy = 0 # lamとyの内積の初期値
+        lamyx = np.zeros(X.shape[1]) # lamとyとXの内積の初期値（要素数：特徴量数）
+        
+        # 固定値算出（最初から作れる）
+        yx = y.reshape(-1,1) * X # X^T * y
+        # データ点識別用の番号生成
+        indices = np.arange(X.shape[0])
+        
+        # 勾配学習
+        for g in range(self.n_iter):
+            # データ番号列（0列目）とy * 勾配の列（1列目）の行列index_y_gradを生成
+            gradient = 1 - np.dot(yx, lamyx.T) # 勾配計算（サンプル数,）
+            y_grad = y * gradient # y * 勾配（サンプル数,）
+            index_y_grad = np.c_[indices, y_grad] # indexを0列目に追加（サンプル数, 2）
+            
+            # i（ラベル-1の点のうちy * 勾配が最小のデータ番号）を決定
+            # (y=+1かつlam>0)または（y=-1かつlam<self.C）の行を抽出
+            row_minus = index_y_grad[((y>0) & (lam>0)) | ((y<0) & (lam<self.C)), :]
+            min_row_minus = np.argmin(row_minus[:, 1]) # その中でy * 勾配が最小の行インデックスを決定
+            i = int(row_minus[min_row_minus, 0]) # その行インデックスに該当するデータ番号を格納
+            
+            # j（ラベル+1の点のうちy * 勾配が最大のデータ番号）を決定
+            # (y=-1かつlam>0)または（y=+1かつlam<self.C）の行を抽出
+            row_plus = index_y_grad[((y<0) & (lam>0)) | ((y>0) & (lam<self.C)), :] # y = +1またはlam>0の行を抽出
+            max_row_plus = np.argmax(row_plus[:, 1]) # その中でy * 勾配が最大の行インデックスを決定
+            j = int(row_plus[max_row_plus, 0]) # その行インデックスに該当するデータ番号を格納
+            
+            # KKT条件から導出する最適解の条件式を満たしているか確認
+            if y_grad[i] >= y_grad[j]:
+                break
+            
+            # 満たしていなければパラメータ更新フローに入る
+            lamy2 = lamy - lam[i] * y[i] - lam[j] * y[j] # lamyの現在の仮変数を計算
+            lamyx2 = lamyx - lam[i] * y[i] * X[i, :] - lam[j] * y[j] * X[j, :] # lamyxの現在の仮変数を計算
+            
+            # lamy2とlamyx2を使い、制約条件を無視したlam_iをまず作成
+            lam_i = (1 - y[i] * y[j] + y[i] * np.dot(X[i, :] - X[j, :], X[j, :] * lamy2 - lamyx2)) / (((X[i] - X[j])**2).sum())
+            # 制約条件：lamの値は0以上self.C以下
+            if lam_i < 0:
+                lam_i = 0
+            elif lam_i > self.C:
+                lam_i = self.C
+            # lam_iが決まればlam_jが決まる
+            lam_j = y[j] * (-lam_i * y[i] - lamy2)
+            # 制約条件：lamの値は0以上self.C以下
+            if lam_j < 0:
+                lam_j = 0
+                lam_i = y[i] * (-lam_j * y[j] - lamy2) # lam_jが変わる場合は改めて計算
+            elif lam_j > self.C:
+                lam_j = self.C
+                lam_i = y[i] * (-lam_j * y[j] - lamy2) # lam_jが変わる場合は改めて計算
+            
+            # lamyとlamyxの変化分で更新
+            lamy += (lam_i - lam[i]) * y[i] + (lam_j - lam[j]) * y[j]
+            lamyx += (lam_i - lam[i]) * y[i] * X[i, :] + (lam_j - lam[j]) * y[j] * X[j, :]
+            
+            # 計算されたlam_iに変化がなければ終了、あれば更新
+            if lam_i == lam[i]:
+                break
+            lam[i] = lam_i
+            lam[j] = lam_j
+            
+            # 評価関数L（最大化）の値をリストに格納
+            evaluation = lam.sum() - (1/2) * lamyx.sum()
+            self.evaluation_.append(evaluation)
+        
+        # 学習が終わったらラグランジュ乗数と学習係数をインスタンス変数に格納
+        self.lam_ = lam
+        ind = lam != 0. # ラグランジュ乗数が更新されたサンプルのインデックス
+        self.w_ = ((lam[ind] * y[ind]).reshape(-1,1) * X[ind, :]).sum(axis=0) # lam*y*Xのサンプル方向の和（要素数：特徴量数）
+        # lam!=0の全サンプルでy * f(x)=1となることを利用して算出したw_0値の平均をとる
+        self.w0_ = (y[ind] - np.dot(X[ind, :], self.w_)).sum() / ind.sum()
+        
+        # 評価関数Lの値の推移を可視化
+        print("評価関数Lの値の推移（最大化）：\n", self.evaluation_)
+        plt.plot(np.arange(len(self.evaluation_)), self.evaluation_, label="evaluation func")
+        plt.xlabel("n_iter")
+        plt.ylabel("evaluation func value")
+        plt.legend(loc="best")
+        plt.show()
+        
+    def predict(self, X):
+        return np.sign(self.w0_ + np.dot(X, self.w_))
+
+
 def scoring_func(X_train, X_test, y_train, y_test, 
-                 model_names, models, feature_names, target_names, test_idx, two_features=False):
+                 model_names, models, feature_names, target_names, test_idx, two_features=False, sv_show=False):
     """
     多値分類（3種まで）を多次元特徴量において複数の学習済モデルで予測・評価し、以下1.、2.、3.を出力する。
     
@@ -321,9 +437,11 @@ def scoring_func(X_train, X_test, y_train, y_test,
     target_names= : list of str
         目的ラベル名のリスト
     test_idx : range of int
-        テストデータのindex
+        テストデータのindex(eg. range(80,100))
     two_features : boolean （初期値：False）
         多次元特徴量から2種類の特徴量を取り出す全組合せでそれぞれ評価、可視化する場合はTrueに設定
+    sv_show : boolean
+        Trueでsuppor vectorを表示する
     """
     score = []
     scoring_names = ["train_accuracy", "test_accuracy", "test_precision", "test_recall", "test_f1_score"]
@@ -365,7 +483,7 @@ def scoring_func(X_train, X_test, y_train, y_test,
                 # 別途定義の決定領域出力関数にパラメータ移譲
                 decision_region(X=X_combined, y=y_combined, model=model, step=0.01, test_idx=test_idx, 
                                 feature_names=feature_names, 
-                                target_names=target_names, model_name=model_name)
+                                target_names=target_names, model_name=model_name, sv_show=sv_show)
                 plt.show()
             else:
                 X_combined = np.vstack((X_train[:, combs[i]], X_test[:, combs[i]]))
@@ -373,7 +491,7 @@ def scoring_func(X_train, X_test, y_train, y_test,
                 # 別途定義の決定領域出力関数にパラメータ移譲
                 decision_region(X=X_combined, y=y_combined, model=model, step=0.01, test_idx=test_idx, 
                                 feature_names=[feature_names[combs[i][0]], feature_names[combs[i][1]]], 
-                                target_names=target_names, model_name=model_name)
+                                target_names=target_names, model_name=model_name, sv_show=sv_show)
                 plt.show()
     # 評価したスコアを集計して表示
     score = np.array(score).reshape(-1,5).round(2) # 各列を5種のスコアに変形
@@ -385,7 +503,7 @@ def scoring_func(X_train, X_test, y_train, y_test,
     plt.show()
 
 
-def decision_region(X, y, model, step=0.01, test_idx=None, feature_names=["f0","f1"], 
+def decision_region(X, y, model, step=0.01, test_idx=None, sv_show=False, feature_names=["f0","f1"], 
                     target_names=["target0","target1","target2"], model_name="unknown model"):
     """
     多値分類（3種まで）を2次元の特徴量で学習したモデルの決定領域を描く。
@@ -404,6 +522,8 @@ def decision_region(X, y, model, step=0.01, test_idx=None, feature_names=["f0","
         推定値を計算する間隔
     test_idx : range of int
         テストデータのindex
+    sv_show : boolean
+        Trueでsuppor vectorを表示する
     feature_names : list of str
         軸ラベルの一覧
     target_names= : list of str
@@ -436,17 +556,25 @@ def decision_region(X, y, model, step=0.01, test_idx=None, feature_names=["f0","
     plt.xlabel(feature_names[0])
     plt.ylabel(feature_names[1])
     
-    # emphasizing test plot only
+    # emphasizing test plot
     if test_idx:
         X_test, y_test = X[test_idx, :], y[test_idx]
         for i, target in enumerate(np.unique(y_test)):
             plt.scatter(X_test[y_test==target][:, 0], X_test[y_test==target][:, 1], 
                         s=100, color=scatter_color[i], edgecolor="black", alpha=1.0, linewidth=1, 
                         label=target_names[i]+"[test_set]", marker="o")
-    plt.legend(loc="best")
-
-
     
+    # emphasizing support-vector plot
+    if sv_show:
+        if test_idx:
+            plt.scatter(X[np.arange(X.shape[0] - len(test_idx))][model.lam_!=0.][:, 0], 
+                        X[np.arange(X.shape[0] - len(test_idx))][model.lam_!=0.][:, 1], 
+                        s=200, color=(0,0,0,0), edgecolor="black", label="support vector", marker='o')
+        else:
+            plt.scatter(X[model.lam_!=0.][:, 0], X[model.lam_!=0.][:, 1], 
+                        s=200, color=(0,0,0,0), edgecolor="black", label="support vector", marker='o')
+    
+    plt.legend(loc="best")
     
 def svc(X_train, X_test, y_train, y_test):
     estimators = [('sc', StandardScaler()),
