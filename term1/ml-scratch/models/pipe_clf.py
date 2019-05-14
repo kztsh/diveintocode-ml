@@ -8,9 +8,10 @@ Created on Mon Apr 29 08:55:18 2019
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
+import matplotlib.pyplot as plt
+from matplotlib import cm
 from IPython.display import display
 from sklearn.metrics import confusion_matrix
 from matplotlib.colors import ListedColormap
@@ -402,6 +403,159 @@ class ScratchSVMClassifier:
         return np.sign(self.w0_ + np.dot(X, self.w_))
 
 
+class ScratchDecisionTreeClassifier:
+    """
+    DecisionTreeClassifierのスクラッチ実装
+
+    Parameters
+    ----------
+    max_depth : int （初期値： None）
+      決定木の階層の深さの制限値
+
+    Attributes
+    ----------
+    self.tree : class Node
+      決定木のルートノード（別途定義クラスのインスタンス）
+    self.feature_importances_ : ndarray, shape (n_features,)
+      学習後の、各特徴量の重要度
+      
+    """
+    def __init__(self, max_depth=None):
+        self.tree = None
+        self.max_depth = max_depth
+    
+    def fit(self, X_train, y_train):
+        # fitting
+        self.n_samples = X_train.shape[0]
+        total_labels = np.unique(y_train)
+        self.tree = Node(self.max_depth)
+        self.tree.divide(X_train, y_train, 0, total_labels) # データ2種、根の深さ0、訓練データのラベル種が引数
+        
+        # feature importances計算
+        self.feature_importances_ = np.zeros(X_train.shape[1])
+        
+        # self.tree（ルートノード）から関数実行開始（関数は本クラス内に別途定義）
+        self._feature_importances_calc(self.tree) # 各ノードにおいて再帰的に計算する関数
+        
+        # 正規化（ゼロ除算の場合は何もしない）
+        try:
+            self.feature_importances_ /= self.feature_importances_.sum()
+        except:
+            return
+    
+    def predict(self, X_test):
+        pred = []
+        # 各サンプル行毎にNodeクラスのpredictメソッドを実行
+        for row in X_test:
+            pred.append(self.tree.predict(row))
+        return np.array(pred)
+    
+    def accuracy_score(self, X_test, y_test):
+        return sum(self.predict(X_test)==y_test) / float(len(y_test))
+    
+    def _feature_importances_calc(self, node):
+        # リーフに達したら計算終了
+        if node.info_gain == 0.0 or node.depth == node.max_depth:
+            return
+        
+        # 親ノードのfeature_importancesを計算し、上記ndarrayに格納
+        self.feature_importances_[node.feature] += node.info_gain * node.n_samples
+        
+        # 左子ノードと右子ノードで同様の処理に進む
+        self._feature_importances_calc(node.left)
+        self._feature_importances_calc(node.right)
+    
+class Node:
+    """
+    決定木分類器内で呼ばれるノードクラス
+    
+    """
+    def __init__(self, max_depth=None):
+        self.max_depth = max_depth
+        self.depth = None
+        self.label = None
+        self.left = None
+        self.right = None
+        self.info_gain = 0.0
+        self.feature = None
+        self.threshold = None
+    
+    def divide(self, X, y, depth, total_labels):
+        # ノードに渡されたデータのサンプル数、ラベル種、深さをこの時点で格納
+        self.n_samples = X.shape[0]
+        self.labels = np.unique(y)
+        self.depth = depth
+        # ラベルが1種類だけ（ピュア）の状態になったらリーフとして終了
+        if len(self.labels) == 1:
+            self.label = y[0]
+            return
+        
+        # ラベルが2種類以上あったら最多ラベルをこのノードのラベルとする
+        unique, count = np.unique(y, return_counts=True)
+        y_count_dict = dict(zip(unique, count))
+        self.label = max(y_count_dict, key=y_count_dict.get)
+        
+        # 情報利得を計算
+        for column in range(X.shape[1]):
+            for threshold in X[:, column]:
+                y_left = y[X[:, column] <= threshold]
+                y_right = y[X[:, column] > threshold]
+                info_gain_calculated = self._info_gain_func(y, y_left, y_right) # スクラッチ関数
+                # 情報利得が大きければ都度更新
+                if self.info_gain < info_gain_calculated:
+                    self.info_gain = info_gain_calculated
+                    self.feature = column
+                    self.threshold = threshold        
+        # for文を回しても情報利得がゼロのままだったらリーフとして終了
+        if self.info_gain == 0.0:
+            return
+        
+        # max_depthまで達したらリーフとして終了
+        if self.depth == self.max_depth:
+            return
+        
+        # 左の子ノード用に、データ割付と新たなノード生成を行い、関数再帰させる
+        X_left = X[X[:, self.feature] <= self.threshold]
+        y_left = y[X[:, self.feature] <= self.threshold]
+        self.left = Node(self.max_depth)
+        # 割付したデータ、+1した深さ、訓練データのラベル種を渡す
+        self.left.divide(X_left, y_left, self.depth+1, total_labels)
+        
+        # 右の子ノード用に、データ割付と新たなノード生成を行い、関数再帰させる
+        X_right = X[X[:, self.feature] > self.threshold]
+        y_right = y[X[:, self.feature] > self.threshold]
+        self.right = Node(self.max_depth)
+        # 割付したデータ、+1した深さ、訓練データのラベル種を渡す
+        self.right.divide(X_right, y_right, self.depth+1, total_labels)
+    
+    def predict(self, row):
+        # リーフまで達したら、既に学習された結果としてそのノードに格納されているラベルを返す
+        # max_depth==Noneのtreeであれば、info_gain=0がリーフとなっている
+        if self.info_gain == 0.0 or self.depth == self.max_depth:
+            return self.label
+        
+        # まだ途中なら更に下流のリーフに向かう
+        else:
+            # 着目する特徴量が閾値以下なら左の子ノードのpredictへ
+            if row[self.feature] <= self.threshold:
+                return self.left.predict(row)
+            # それ以外は右の子ノードのpredictへ
+            else:
+                return self.right.predict(row)
+    
+    def _info_gain_func(self, y_parent, y_left, y_right):
+        return self._gini_func(y_parent) - (
+            y_left.shape[0] / y_parent.shape[0]) * self._gini_func(y_left) - (
+            y_right.shape[0] / y_parent.shape[0]) * self._gini_func(y_right)
+    
+    def _gini_func(self, y):
+        gini = 1
+        y_species = np.unique(y)
+        for y_i in y_species:
+            gini -= (sum(y==y_i) / y.shape[0])**2
+        return gini
+
+
 def scoring_func(X_train, X_test, y_train, y_test, 
                  model_names, models, feature_names, target_names, test_idx, two_features=False, sv_show=False):
     """
@@ -504,9 +658,9 @@ def scoring_func(X_train, X_test, y_train, y_test,
 
 
 def decision_region(X, y, model, step=0.01, test_idx=None, sv_show=False, feature_names=["f0","f1"], 
-                    target_names=["target0","target1","target2"], model_name="unknown model"):
+                    target_names=None, model_name="unknown model"):
     """
-    多値分類（3種まで）を2次元の特徴量で学習したモデルの決定領域を描く。
+    多値分類を2次元の特徴量で学習したモデルの決定領域を描く。
     背景の色が学習したモデルによる推定値から描画される。
     散布図の点は学習用・テスト用データである。
 
@@ -531,13 +685,11 @@ def decision_region(X, y, model, step=0.01, test_idx=None, sv_show=False, featur
     model_name : str
         グラフタイトルに組み込むmodel名
     """
-    # setting（2値分類の場合は2色、3値分類の場合は3色としておく）
-    n_class = np.unique(y).shape[0]
-    scatter_color = ['red', 'blue', 'green']
-    contourf_color = ['pink', 'skyblue', 'lightgreen']
-    if n_class<3:
-        scatter_color = ['red', 'blue']
-        contourf_color = ['pink', 'skyblue']    
+    # setting
+    n_classes = np.unique(y).shape[0]
+    colors = [cm.jet(float(i) / n_classes) for i in range(n_classes)]
+    if target_names is None:
+        target_names=[i for i in range(len(np.unique(y)))] # target_namesに指定がなければ[0,1,2,...]をラベルとする
 
     # pred
     x1_min, x1_max = np.min(X[:, 0])-0.5, np.max(X[:, 0])+0.5
@@ -547,11 +699,11 @@ def decision_region(X, y, model, step=0.01, test_idx=None, sv_show=False, featur
     Z = model.predict(mesh).reshape(xx1.shape)
 
     # train & test plot
-    plt.contourf(xx1, xx2, Z, n_class-1, cmap=ListedColormap(contourf_color))
-    plt.contour(xx1, xx2, Z, n_class-1, colors='black', linewidths=2, alpha=0.5)
+    plt.contourf(xx1, xx2, Z, n_classes-1, cmap=ListedColormap(colors), alpha=0.2)
+    plt.contour(xx1, xx2, Z, n_classes-1, colors='black', linewidths=2, alpha=0.5)
     for i, target in enumerate(np.unique(y)):
         plt.scatter(X[y==target][:, 0], X[y==target][:, 1], 
-                    s=80, color=scatter_color[i], alpha=0.3, label=target_names[i], marker='o')
+                    s=80, color=colors[i], alpha=0.3, label=target_names[i], marker='o')
     plt.title("decision region["+model_name+"]")
     plt.xlabel(feature_names[0])
     plt.ylabel(feature_names[1])
