@@ -18,7 +18,7 @@ sprint04    機械学習スクラッチロジスティック回帰
 sprint05    機械学習スクラッチSVM  
 sprint06    機械学習スクラッチ決定木  
 sprint07    機械学習スクラッチクラスタリング  
-sprint08    機械学習復習（SlideShare）  
+sprint08    機械学習復習（今期未実施なので省略）  
 sprint09    アンサンブル学習、グループワーク  
 **----Term2----**  
 sprint10    NNスクラッチ  
