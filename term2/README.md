@@ -7,3 +7,4 @@ Sprint12: 深層学習CNNスクラッチ1（畳み込みニューラルネット
 Sprint13: 深層学習CNNスクラッチ2（畳み込みニューラルネットワーク）  
 Sprint14: ディープラーニングフレームワーク1（Tensorflow）  
 Sprint15: ディープラーニングフレームワーク2（Keras）  
+Sprint16: 論文読解入門 (Faster R-CNN)  
