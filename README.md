@@ -37,15 +37,3 @@ sprint22    自然言語処理（word2vec）
 sprint23    深層学習スクラッチRNN  
 sprint24    深層学習LSTM  
 sprint25    自然言語演習（seq2seq）  
-**----Term3----**  
-sprint26    個人プロダクト製作準備  
-sprint27    GAN（Pytorch）  
-sprint28    Slack分析（NLP）  
-sprint29    プロトタイプ作成（商品分類）  
-sprint30    プロトタイプ作成（商品分類）  
-sprint31    プロトタイプ作成（商品分類）  
-sprint32    推薦システム作成  
-sprint33    Flask、webアプリ  
-sprint34    推薦システム作成  
-sprint35    異常検知  
-sprint36    異常検知  
